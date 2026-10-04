@@ -2484,6 +2484,53 @@ class TestConvertUncovered(unittest.TestCase):
         result = obj._parse_mapping_file("fake.yaml")
         self.assertEqual(result, {})
 
+    def test_update_from_meta_ignores_missing_version(self):
+        """Missing version metadata must not add the string \"None\" as a choice."""
+        obj = c.ConvertVars.__new__(c.ConvertVars)
+        editions = set()
+        versions = set()
+        languages = set()
+        layouts = set()
+        templates = set()
+        edition_version_map = {}
+
+        obj._update_from_meta(
+            {"edition": "webapp"},
+            editions,
+            versions,
+            languages,
+            layouts,
+            templates,
+            edition_version_map,
+        )
+
+        self.assertEqual(editions, {"webapp"})
+        self.assertNotIn("None", versions)
+        self.assertEqual(edition_version_map, {})
+
+    def test_update_from_meta_preserves_valid_version(self):
+        """A valid version must still be added to the detected choices."""
+        obj = c.ConvertVars.__new__(c.ConvertVars)
+        editions = set()
+        versions = set()
+        languages = set()
+        layouts = set()
+        templates = set()
+        edition_version_map = {}
+
+        obj._update_from_meta(
+            {"edition": "webapp", "version": "3.0"},
+            editions,
+            versions,
+            languages,
+            layouts,
+            templates,
+            edition_version_map,
+        )
+
+        self.assertEqual(versions, {"3.0"})
+        self.assertEqual(edition_version_map, {"webapp": {"3.0": "3.0"}})
+
     # ---------- _validate_file_paths ----------
 
     @patch("scripts.convert.os.path.isfile", return_value=True)
