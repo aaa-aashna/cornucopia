@@ -605,8 +605,20 @@ def export_pdfs(sla_filepath, card, edition, language, size_key, config, assets_
         place_artwork_frame(back_frame_name(), width, height, offset)
 
         exported = []
+        export_failed = False
         for export_profile in profiles:
-            exported.append(write_pdf(export_profile, card, edition, language, size_key, config, out_dir, log))
+            try:
+                exported.append(
+                    write_pdf(export_profile, card, edition, language, size_key, config, out_dir, log)
+                )
+            except Exception as exc:
+                export_failed = True
+                log.warn("PDF export failed for {0}: {1}".format(card["card_id"], exc))
+
+        scribus.closeDoc()
+        return exported, export_failed
+
+    except Exception as exc:
 
         scribus.closeDoc()
         return exported, False
