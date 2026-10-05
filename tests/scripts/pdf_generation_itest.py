@@ -159,7 +159,11 @@ class TestPdfExportFailureHandling(unittest.TestCase):
             patch.object(generate_deck.cc, "resolve_background", return_value=("background.png", True)),
             patch.object(generate_deck, "apply_scribus_colours"),
             patch.object(generate_deck, "place_artwork_frame"),
-            patch.object(generate_deck, "write_pdf", side_effect=RuntimeError("PDF export failed")),
+            patch.object(
+                generate_deck,
+                "write_pdf",
+                side_effect=[RuntimeError("PDF export failed"), {"path": "ok.pdf"}],
+            ),
         ):
             exported, failed = generate_deck.export_pdfs(
                 "card.sla",
@@ -171,13 +175,48 @@ class TestPdfExportFailureHandling(unittest.TestCase):
                 {},
                 tempfile.gettempdir(),
                 tempfile.gettempdir(),
-                [{}],
+                [{}, {}],
                 log,
             )
 
-        self.assertEqual(exported, [])
+        self.assertEqual(len(exported), 1)
         self.assertTrue(failed)
-        self.assertTrue(any("Export crashed on AA2" in warning for warning in log.warnings))
+        self.assertTrue(any("PDF export failed for AA2" in warning for warning in log.warnings))
+
+    def test_all_profiles_are_attempted_after_an_export_failure(self) -> None:
+        log = _CollectingLog()
+        card = {"card_id": "AA2"}
+        scribus_mock = MagicMock()
+
+        with (
+            patch.object(generate_deck, "SCRIBUS_AVAILABLE", True),
+            patch.object(generate_deck, "scribus", scribus_mock),
+            patch.object(generate_deck.cc, "resolve_background", return_value=("background.png", True)),
+            patch.object(generate_deck, "apply_scribus_colours"),
+            patch.object(generate_deck, "place_artwork_frame"),
+            patch.object(
+                generate_deck,
+                "write_pdf",
+                side_effect=[RuntimeError("first profile failed"), {"path": "second.pdf"}],
+            ) as write_pdf,
+        ):
+            exported, failed = generate_deck.export_pdfs(
+                "card.sla",
+                card,
+                "demo",
+                "en",
+                "bridge",
+                {},
+                {},
+                tempfile.gettempdir(),
+                tempfile.gettempdir(),
+                [{}, {}],
+                log,
+            )
+
+        self.assertTrue(failed)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(write_pdf.call_count, 2)
 
 
 class TestCardTextIsInjected(TemplatePopulationTestCase):
