@@ -575,7 +575,7 @@ def write_pdf(export_profile, card, edition, language, size_key, config, out_dir
 
 def export_pdfs(sla_filepath, card, edition, language, size_key, config, assets_data, base_dir, out_dir, profiles, log):
     if not SCRIBUS_AVAILABLE:
-        return []
+        return [], False
 
     profile = (config.get("size_profiles", {}) or {}).get(size_key, {}) or {}
 
@@ -609,7 +609,7 @@ def export_pdfs(sla_filepath, card, edition, language, size_key, config, assets_
             exported.append(write_pdf(export_profile, card, edition, language, size_key, config, out_dir, log))
 
         scribus.closeDoc()
-        return exported
+        return exported, False
 
     except Exception as exc:
         log.warn("Export crashed on {0}: {1}".format(card["card_id"], exc))
@@ -752,6 +752,7 @@ def build_target(target, args, config, assets_data, base_dir, out_dir, profiles,
         "cards": len(deck),
         "jokers": jokers,
         "pdfs": 0,
+        "export_failures": 0,
     }
 
     if args.dry_run:
@@ -764,11 +765,12 @@ def build_target(target, args, config, assets_data, base_dir, out_dir, profiles,
 
         sla_path = os.path.join(out_dir, cc.sla_name(config, edition, card["card_id"], size_key, language))
         generate_card(card, edition, language, size_key, template_path, sla_path, config, assets_data, base_dir, log)
-        record["pdfs"] += len(
-            export_pdfs(
-                sla_path, card, edition, language, size_key, config, assets_data, base_dir, out_dir, profiles, log
-            )
+        pdfs, export_failed = export_pdfs(
+            sla_path, card, edition, language, size_key, config, assets_data, base_dir, out_dir, profiles, log
         )
+        record["pdfs"] += len(pdfs)
+        if export_failed:
+            record["export_failures"] += 1
 
     log.info("  generated {0} card file(s), {1} PDF(s)".format(len(deck), record["pdfs"]))
     return record
@@ -816,7 +818,13 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
         os.makedirs(cc.qr_dir(config, base_dir), exist_ok=True)
 
-    manifest = {"targets": [], "warnings": [], "total_cards": 0, "total_pdfs": 0}
+    manifest = {
+        "targets": [],
+        "warnings": [],
+        "total_cards": 0,
+        "total_pdfs": 0,
+        "total_export_failures": 0,
+    }
 
     for target in targets:
         record = build_target(target, args, config, assets_data, base_dir, out_dir, profiles, log)
@@ -824,6 +832,7 @@ def main():
             manifest["targets"].append(record)
             manifest["total_cards"] += record["cards"]
             manifest["total_pdfs"] += record["pdfs"]
+            manifest["total_export_failures"] += record["export_failures"]
 
     manifest["warnings"] = log.warnings
     manifest_path = os.path.join(base_dir, paths.get("manifest_file", "build_manifest.json"))
@@ -836,7 +845,7 @@ def main():
         )
     )
     log.info("Manifest: {0}".format(manifest_path))
-    return 0
+    return 1 if manifest["total_export_failures"] else 0
 
 
 if __name__ == "__main__":
