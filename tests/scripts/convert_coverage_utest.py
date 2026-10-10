@@ -32,6 +32,47 @@ class TestValidateFilePaths(unittest.TestCase):
         finally:
             os.unlink(tmp)
 
+    def test_sibling_source_path_sharing_base_prefix_is_rejected(self) -> None:
+        """Reject a source in a sibling directory whose name shares BASE_PATH's prefix."""
+        parent_dir = os.path.dirname(c.convert_vars.BASE_PATH)
+        sibling_dir = os.path.join(parent_dir, os.path.basename(c.convert_vars.BASE_PATH) + "_backup")
+        os.makedirs(sibling_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile(suffix=".odt", delete=False, dir=sibling_dir) as f:
+            source_path = f.name
+        output_dir = os.path.join(c.convert_vars.BASE_PATH, "output")
+        os.makedirs(output_dir, exist_ok=True)
+        try:
+            result = c._validate_file_paths(source_path, os.path.join(output_dir, "test.pdf"))
+            self.assertFalse(result[0])
+            self.assertIn("outside base directory", result[1])
+        finally:
+            os.unlink(source_path)
+            try:
+                os.rmdir(sibling_dir)
+            except OSError:
+                pass
+
+    def test_sibling_output_directory_sharing_base_prefix_is_rejected(self) -> None:
+        """Reject an output directory in a sibling directory sharing BASE_PATH's prefix."""
+        source_dir = os.path.join(c.convert_vars.BASE_PATH, "output")
+        os.makedirs(source_dir, exist_ok=True)
+        source_path = os.path.join(source_dir, "boundary_test_source.odt")
+        with open(source_path, "w", encoding="utf-8") as f:
+            f.write("test")
+        parent_dir = os.path.dirname(c.convert_vars.BASE_PATH)
+        sibling_dir = os.path.join(parent_dir, os.path.basename(c.convert_vars.BASE_PATH) + "_backup")
+        os.makedirs(sibling_dir, exist_ok=True)
+        try:
+            result = c._validate_file_paths(source_path, os.path.join(sibling_dir, "test.pdf"))
+            self.assertFalse(result[0])
+            self.assertIn("outside base directory", result[1])
+        finally:
+            os.unlink(source_path)
+            try:
+                os.rmdir(sibling_dir)
+            except OSError:
+                pass
+
     def test_source_path_outside_base_directory(self) -> None:
         """Should return False when source path is outside BASE_PATH (path traversal prevention)."""
         with tempfile.NamedTemporaryFile(suffix=".odt", delete=False, dir=tempfile.gettempdir()) as f:
