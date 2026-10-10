@@ -173,11 +173,19 @@ def _validate_file_paths(source_filename: str, output_pdf_filename: str) -> Tupl
     if not os.path.isdir(output_dir):
         return False, f"Output directory does not exist: {output_dir}", ""
 
-    # Ensure paths are within expected directories to prevent path traversal
+    # Ensure paths are within the repository base directory. commonpath()
+    # enforces a directory boundary, unlike string-prefix checks.
     base_path = os.path.abspath(convert_vars.BASE_PATH)
-    if not source_path.startswith(base_path):
+    try:
+        source_is_within_base = os.path.commonpath([base_path, source_path]) == base_path
+        output_is_within_base = os.path.commonpath([base_path, output_dir]) == base_path
+    except ValueError:
+        # Paths on different drives (Windows) do not share a common path.
+        return False, f"Source or output path outside base directory: {source_path}", ""
+
+    if not source_is_within_base:
         return False, f"Source path outside base directory: {source_path}", ""
-    if not output_dir.startswith(base_path):
+    if not output_is_within_base:
         return False, f"Output directory outside base directory: {output_dir}", ""
 
     return True, source_path, output_dir
