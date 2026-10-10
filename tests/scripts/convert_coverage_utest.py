@@ -56,9 +56,8 @@ class TestValidateFilePaths(unittest.TestCase):
         """Reject an output directory in a sibling directory sharing BASE_PATH's prefix."""
         source_dir = os.path.join(c.convert_vars.BASE_PATH, "output")
         os.makedirs(source_dir, exist_ok=True)
-        source_path = os.path.join(source_dir, "boundary_test_source.odt")
-        with open(source_path, "w", encoding="utf-8") as f:
-            f.write("test")
+        with tempfile.NamedTemporaryFile(suffix=".odt", delete=False, dir=source_dir) as f:
+            source_path = f.name
         parent_dir = os.path.dirname(c.convert_vars.BASE_PATH)
         sibling_dir = os.path.join(parent_dir, os.path.basename(c.convert_vars.BASE_PATH) + "_backup")
         os.makedirs(sibling_dir, exist_ok=True)
